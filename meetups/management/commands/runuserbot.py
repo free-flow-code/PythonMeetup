@@ -1,7 +1,7 @@
 import logging
 
 from django.core.management.base import BaseCommand
-from telegram.ext import Updater
+from aiogram import Bot, Dispatcher, executor, types
 from conf import settings
 
 logging.basicConfig(
@@ -11,5 +11,16 @@ logging.basicConfig(
 
 logger = logging.getLogger('UserBot')
 
+bot = Bot(settings.TG_TOKEN_API)
+dp = Dispatcher(bot)
+
+
+@dp.message_handler()
+async def echo(message: types.Message):
+    if message.text.count(' ') >= 1:
+        await message.answer(text=message.text.upper())
+
+
 class Command(BaseCommand):
-    pass
+    def handle(self, *args, **kwargs):
+        executor.start_polling(dp)
