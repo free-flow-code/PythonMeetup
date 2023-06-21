@@ -8,8 +8,8 @@ class Client(models.Model):
     created_at = models.DateTimeField(verbose_name="Создано", auto_now_add=True)
 
     class Meta:
-        verbose_name = 'Клиент'
-        verbose_name_plural = 'Клиенты'
+        verbose_name = 'Пользователь'
+        verbose_name_plural = 'Пользователи'
 
     def __str__(self):
         return f'{self.chat_id}: {self.first_name} {self.last_name}'
@@ -17,6 +17,7 @@ class Client(models.Model):
 
 class Event(models.Model):
     name = models.CharField(max_length=150, verbose_name='Название мероприятия')
+    description = models.TextField(verbose_name='Описание мероприятия', blank=True, null=True)
     date = models.DateField(verbose_name='Дата мероприятия')
     start_time = models.TimeField(verbose_name='Время начала мероприятия')
     visitors = models.ManyToManyField(
