@@ -10,7 +10,8 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from meetups.models import(
     Client,
     Event,
-    Presentation
+    Presentation,
+    Question
 )
 from asgiref.sync import sync_to_async
 from conf import settings
@@ -164,7 +165,7 @@ async def user_register_personal_info_handler(message: types.Message, state: FSM
     await state.finish()
 
 
-def get_presentation_details(presentations):
+def display_presentations(presentations):
     if presentations:
         my_presentations_keyboard = []
         presentations_details = []
@@ -194,12 +195,34 @@ async def my_presentations_handler(callback: types.CallbackQuery) -> None:
     user_id = callback.from_user.id
     speaker = await sync_to_async(Client.objects.get)(chat_id=user_id)
     speaker_presentations = await sync_to_async(Presentation.objects.filter)(speaker_id=speaker.id)
-    my_presentations_keyboard, presentations_details = await sync_to_async(get_presentation_details)(speaker_presentations)
+    my_presentations_keyboard, presentations_details = await sync_to_async(display_presentations)(speaker_presentations)
     presentations_keyboard = InlineKeyboardMarkup(inline_keyboard=my_presentations_keyboard)
 
     await callback.message.edit_text('\n'.join(presentations_details),
                                      parse_mode='HTML',
                                      reply_markup=presentations_keyboard,
+                                     )
+
+
+def get_questions_details(questions):
+    questions_details = []
+    for question in questions:
+        questions_details.append(
+            f'<b>Вопрос от:</b>\n{str(question.client).split(": ")[-1]}\n'
+            f'<b>Текст:</b>\n{question.text}'
+        )
+    return questions_details
+
+
+
+@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('questions_'))
+async def my_presentations_handler(callback: types.CallbackQuery) -> None:
+    presentation_id = callback.data.split('_')[-1]
+    presentation = await sync_to_async(Presentation.objects.get)(id=presentation_id)
+    questions = await sync_to_async(Question.objects.filter)(presentation=presentation_id)
+    questions_details = await sync_to_async(get_questions_details)(questions)
+    await callback.message.edit_text('\n'.join(questions_details),
+                                     parse_mode='HTML',
                                      )
 
 
