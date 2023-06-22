@@ -54,11 +54,12 @@ class Presentation(models.Model):
     event = models.ForeignKey(Event, on_delete=models.CASCADE, verbose_name='Мероприятие')
     start_time = models.TimeField(verbose_name='Время начала презентации')
     end_time = models.TimeField(verbose_name='Время окончания презентации')
+    is_finished = models.BooleanField(verbose_name='Завершен', default=False)
     speaker = models.ForeignKey(Client, on_delete=models.CASCADE, verbose_name='Спикер', related_name='presentations')
 
     class Meta:
-        verbose_name = 'Презентация'
-        verbose_name_plural = 'Презентации'
+        verbose_name = 'Доклад'
+        verbose_name_plural = 'Доклады'
 
     def __str__(self):
         return f'{self.name}: {self.event.name}'
