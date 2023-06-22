@@ -51,7 +51,7 @@ class Visitor(models.Model):
 class Presentation(models.Model):
     name = models.CharField(max_length=150, verbose_name='Название презентации')
     annotation = models.TextField(verbose_name='Аннотация')
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, verbose_name='Мероприятие')
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, verbose_name='Мероприятие', related_name='presentations')
     start_time = models.TimeField(verbose_name='Время начала презентации')
     end_time = models.TimeField(verbose_name='Время окончания презентации')
     is_finished = models.BooleanField(verbose_name='Завершен', default=False)

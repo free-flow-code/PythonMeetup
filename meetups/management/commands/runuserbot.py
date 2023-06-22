@@ -12,13 +12,13 @@ from meetups.models import (
     Client,
     Event,
     Presentation,
-    Question
+    Question,
     Visitor,
 )
 from asgiref.sync import sync_to_async
 from conf import settings
 from meetups.management.commands.database import db_start, get_user_presentations, get_user_events
-
+from meetups.management.commands.user_keyboards import get_user_main_keyboard
 
 logging.basicConfig(
     level=logging.INFO,
@@ -52,53 +52,55 @@ class ClientRegisterFSM(StatesGroup):
     choose_event = State()
     personal_info = State()
 
-def get_user_main_keyboard(client):
-    inline_keyboard = []
 
-    today = datetime.today()
-    now = datetime.now()
-    current_event = sync_to_async(Event.objects.first)()
+# async def is_speaker(user_id):
+#     presentations = await sync_to_async(Presentation.objects.all)()
+#     speakers = []
+#     async for presentation in presentations:
+#         speaker_id = await sync_to_async(lambda: presentation.speaker.chat_id)()
+#         await sync_to_async(speakers.append)(speaker_id)
+#     if str(user_id) in speakers:
+#         return True
 
-    if current_event:
-        first_row = [
-            InlineKeyboardButton(text='Программа', callback_data='show_schedule'),
-        ]
-        inline_keyboard.append(first_row)
 
-    inline_keyboard.append([
-        InlineKeyboardButton(text='Сделать донат', callback_data='donate'),
-    ])
-    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
-
-async def is_speaker(user_id):
-    presentations = await sync_to_async(Presentation.objects.all)()
-    speakers = []
-    async for presentation in presentations:
-        speaker_id = await sync_to_async(lambda: presentation.speaker.chat_id)()
-        await sync_to_async(speakers.append)(speaker_id)
-    if str(user_id) in speakers:
-        return True
-
+# async def get_user_main_keyboard(client):
+#     inline_keyboard = []
+#
+#     today = datetime.today()
+#     now = datetime.now()
+#     current_event = await sync_to_async(Event.objects.filter(date__gte=today).first)()
+#
+#
+#     if current_event:
+#         first_row = [
+#             InlineKeyboardButton(text='Программа', callback_data='show_schedule'),
+#         ]
+#         inline_keyboard.append(first_row)
+#
+#     inline_keyboard.append([
+#         InlineKeyboardButton(text='Сделать донат', callback_data='donate'),
+#     ])
+#     return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
 @dp.message_handler(commands=['start'])
 async def start_command(message: types.Message) -> None:
     client, created = await sync_to_async(Client.objects.get_or_create)(
         chat_id=message.from_user.id,
     )
-    if await is_speaker(message.from_user.id):
-        await message.answer('🤖 Добро пожаловать в чат-бот\n<b>Python Meetups!</b>\n\n'
-                             'Так как вы являетесь докладчиком на некоторых меропрятиях,'
-                             ' то вы можете:\n\n'
-                             '👀 посмотреть вопросы от зрителей вашей презентации,\n\n'
-                             '✅ быстро <b>зарегистрироваться</b> на мероприятие,\n\n'
-                             '📖 легко ознакомиться с <b>программой</b>,\n\n'
-                             '❓<b>задавать вопросы</b> другим докладчикам\n\n'
-                             '💰а также поддержать нас, отправив донат.\n\n'
-                             ,
-                             parse_mode='HTML',
-                             reply_markup=speaker_keyboard,
-                             )
-    elif created or not client.first_name or not client.last_name:
+    # if await is_speaker(message.from_user.id):
+    #     await message.answer('🤖 Добро пожаловать в чат-бот\n<b>Python Meetups!</b>\n\n'
+    #                          'Так как вы являетесь докладчиком на некоторых меропрятиях,'
+    #                          ' то вы можете:\n\n'
+    #                          '👀 посмотреть вопросы от зрителей вашей презентации,\n\n'
+    #                          '✅ быстро <b>зарегистрироваться</b> на мероприятие,\n\n'
+    #                          '📖 легко ознакомиться с <b>программой</b>,\n\n'
+    #                          '❓<b>задавать вопросы</b> другим докладчикам\n\n'
+    #                          '💰а также поддержать нас, отправив донат.\n\n'
+    #                          ,
+    #                          parse_mode='HTML',
+    #                          reply_markup=speaker_keyboard,
+    #                          )
+    if created or not client.first_name or not client.last_name:
         await message.answer('🤖 Добро пожаловать в чат-бот\n<b>Python Meetups!</b>\n\n'
                              'Я помогу вам получить 💪 максимум от каждого события.\n'
                              'С моей помощью вы можете:\n\n'
@@ -113,7 +115,7 @@ async def start_command(message: types.Message) -> None:
     else:
         # await get_user_presentations(client.pk)
         # await get_user_events(client.pk)
-        user_main_keyboard = get_user_main_keyboard(client)
+        user_main_keyboard = await get_user_main_keyboard(client)
         await message.answer('Вы перешли в главное меню.',
                              parse_mode='HTML',
                              reply_markup=user_main_keyboard,
