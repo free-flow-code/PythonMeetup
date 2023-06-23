@@ -15,7 +15,7 @@ from meetups.models import (
     Event,
     Presentation,
     Question,
-    Visitor,
+    Visitor, Likes,
 )
 from asgiref.sync import sync_to_async
 from conf import settings
@@ -274,13 +274,14 @@ async def save_question_handler(message: types.Message, state: FSMContext) -> No
         Presentation.objects.filter(pk=presentation_id).annotate(num_questions=Count('questions')).first
     )()
     question_number = presentation.num_questions + 1
+    client = await sync_to_async(Client.objects.get)(chat_id=message.from_user.id)
     await sync_to_async(Question.objects.create)(
-        client=await sync_to_async(Client.objects.get)(chat_id=message.from_user.id),
+        client=client,
         presentation=presentation,
         text=message.text,
         question_number=question_number,
     )
-    client = await sync_to_async(Client.objects.get)(chat_id=message.from_user.id)
+
     await message.answer('Ваш вопрос отправлен докладчику!',
                          parse_mode='HTML',
                          reply_markup=await get_user_main_keyboard(client),
@@ -288,7 +289,39 @@ async def save_question_handler(message: types.Message, state: FSMContext) -> No
     await state.finish()
 
 
-
+@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('question_like'), state='*')
+async def ask_question_handler(callback: types.CallbackQuery) -> None:
+    question_id = callback.data.split('_')[-1]
+    client = await sync_to_async(Client.objects.get)(chat_id=callback.from_user.id)
+    question = await sync_to_async(
+        Question.objects.filter(
+            pk=question_id,
+        ).select_related('presentation').select_related('client').prefetch_related('likes').first)()
+    increased_likes_number = await sync_to_async(question.likes.count)() + 1
+    exists_user_like = await sync_to_async(Likes.objects.filter(
+        client__chat_id=callback.from_user.id,
+        question=question,
+    ).exists)()
+    if exists_user_like:
+        await callback.message.edit_text(f'Вы уже поддержали вопрос №{question_id}!',
+                                      parse_mode='HTML',
+                                      reply_markup=await get_user_main_keyboard(client),
+                                      )
+        return
+    await sync_to_async(Likes.objects.create)(
+        client=client,
+        question=question,
+    )
+    await callback.message.edit_text(f'<b>Вопрос №{question.question_number}:</b> 👍 {increased_likes_number}\n'
+                              f'--------------------------------------\n\n'
+                              f'{question.text}\n\n',
+                              parse_mode='HTML',
+                              reply_markup=await get_current_presentation_question_keyboard(
+                                  question,
+                                  callback.from_user.id,
+                                  False,
+                              ),
+                              )
 
 class Command(BaseCommand):
     def handle(self, *args, **kwargs):

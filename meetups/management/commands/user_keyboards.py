@@ -139,15 +139,24 @@ async def get_current_presentation_keyboard(presentation, speaker):
 
 async def get_current_presentation_question_keyboard(question, chat_id, speaker):
     question = question
-    exists_like = await sync_to_async(Likes.objects.filter(client__chat_id=chat_id).exists)()
+    logger.info(f'question: {question}')
+    exists_user_like = await sync_to_async(Likes.objects.filter(
+        client__chat_id=chat_id,
+        question=question,
+    ).exists)()
     inline_keyboard = []
-
+    author = int(question.client.chat_id) == int(chat_id)
     if speaker:
         inline_keyboard.append([
             InlineKeyboardButton(text='Закрыть вопрос', callback_data=f'question_close_{question.pk}'),
         ])
+    elif author:
+        inline_keyboard.append([
+            InlineKeyboardButton(text='🔥 Вы автор данного вопроса', callback_data='none'),
+        ])
     else:
-        if exists_like:
+        logger.info(f'exists_like - {exists_user_like}')
+        if exists_user_like:
             inline_keyboard.append([
                 InlineKeyboardButton(text='✅ Вы уже поддержали данный вопрос', callback_data='none'),
             ])
