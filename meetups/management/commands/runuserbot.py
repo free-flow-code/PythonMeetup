@@ -23,6 +23,7 @@ from meetups.management.commands.user_keyboards import (
     get_current_presentation_keyboard,
     get_current_presentation_question_keyboard,
     get_question_main_menu_keyboard,
+    get_cancel_keyboard,
 )
 
 logging.basicConfig(
@@ -46,6 +47,10 @@ user_register_keyboard = InlineKeyboardMarkup(inline_keyboard=[
 class ClientRegisterFSM(StatesGroup):
     choose_event = State()
     personal_info = State()
+
+
+class ClientAskQuestionFSM(StatesGroup):
+    enter_question = State()
 
 
 @dp.message_handler(commands=['start'])
@@ -244,6 +249,37 @@ async def show_current_presentation_questions_handler(callback: types.CallbackQu
                                       speaker,
                                   ),
                                   )
+
+
+@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('question_ask'), state='*')
+async def ask_question_handler(callback: types.CallbackQuery, state: FSMContext) -> None:
+    presentation_id = callback.data.split('_')[-1]
+    await ClientAskQuestionFSM.enter_question.set()
+    await callback.message.answer('Введите ваш вопрос:',
+                                  parse_mode='HTML',
+                                  reply_markup=await get_cancel_keyboard(),
+                                  )
+    async with state.proxy() as data:
+        data['presentation_id'] = presentation_id
+
+
+@dp.message_handler(state=ClientAskQuestionFSM.enter_question)
+async def entered_question_handler(message: types.Message, state: FSMContext) -> None:
+    async with state.proxy() as data:
+        presentation_id = data['presentation_id']
+    await sync_to_async(Question.objects.create)(
+        client=await sync_to_async(Client.objects.get)(chat_id=message.from_user.id),
+        presentation=await sync_to_async(Presentation.objects.get)(pk=presentation_id),
+        text=message.text,
+    )
+    client = await sync_to_async(Client.objects.get)(chat_id=message.from_user.id)
+    await message.answer('Ваш вопрос отправлен докладчику!',
+                         parse_mode='HTML',
+                         reply_markup=await get_user_main_keyboard(client),
+                         )
+    await state.finish()
+
+
 
 
 class Command(BaseCommand):

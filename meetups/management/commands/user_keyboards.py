@@ -15,6 +15,14 @@ logging.basicConfig(
 logger = logging.getLogger('UserKeyboards')
 
 
+async def get_cancel_keyboard():
+    inline_keyboard = [
+        [
+            InlineKeyboardButton(text='Отменить', callback_data='cancel'),
+        ],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+
 async def get_user_main_keyboard(client):
     inline_keyboard=[]
 
@@ -173,6 +181,9 @@ async def get_question_main_menu_keyboard(presentation_id, speaker):
             ],
         ]
     return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+
+
+
 
 if __name__ == '__main__':
     today = datetime.today()

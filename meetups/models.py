@@ -76,7 +76,7 @@ class Question(models.Model):
         verbose_name_plural = 'Вопросы'
 
     def __str__(self):
-        return f'{self.title}, {self.client.first_name} {self.client.last_name}'
+        return f'{self.text}, {self.client.first_name} {self.client.last_name}'
 
 class Likes(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE, verbose_name='Вопрос', related_name='likes')
