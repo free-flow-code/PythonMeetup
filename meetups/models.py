@@ -66,6 +66,7 @@ class Presentation(models.Model):
 
 
 class Question(models.Model):
+    title = models.CharField(max_length=50, verbose_name='Заголовок вопроса')
     text = models.TextField(verbose_name='Текст вопроса')
     presentation = models.ForeignKey(Presentation, on_delete=models.CASCADE, verbose_name='Презентация', related_name='questions')
     client = models.ForeignKey(Client, on_delete=models.CASCADE, verbose_name='Клиент', related_name='questions')
@@ -76,7 +77,7 @@ class Question(models.Model):
         verbose_name_plural = 'Вопросы'
 
     def __str__(self):
-        return f'{self.text}, ({self.client.first_name} {self.client.last_name})'
+        return f'{self.title}, {self.client.first_name} {self.client.last_name}'
 
 class Likes(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE, verbose_name='Вопрос', related_name='likes')

@@ -5,7 +5,7 @@ from datetime import datetime
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from asgiref.sync import sync_to_async
 
-from meetups.models import Event, Presentation, Visitor, Client
+from meetups.models import Event, Presentation, Visitor, Client, Question, Likes
 
 logging.basicConfig(
     level=logging.INFO,
@@ -49,7 +49,8 @@ async def get_user_main_keyboard(client):
         inline_keyboard.append([
             InlineKeyboardButton(text='Мои доклады', callback_data='show_my_presentations'),
         ])
-    user_events_ids = await sync_to_async(Client.objects.filter(pk=18, events__date__gte=today).distinct().values_list)('events', flat=True)
+    user_events_ids = await sync_to_async(
+        Client.objects.filter(pk=18,events__date__gte=today).distinct().values_list)('events', flat=True)
     user_events_ids = await sync_to_async(list)(user_events_ids)
     exist_other_events = await sync_to_async(Event.objects.exclude(pk__in=user_events_ids).exists)()
     events_row = []
@@ -71,32 +72,109 @@ async def get_user_main_keyboard(client):
     return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
 
-# async def get_event_schedule_keyboard(event):
-#     presentations = await sync_to_async(Event.presentations.all)()
-#     inline_keyboard = []
-#     async for event in events:
-#         when_info = f'{event.date.strftime("%d.%m")} {event.start_time.strftime("%H:%M")}'
-#         name_info = f'{event.name}'
-#         event_keyboard = [[
-#             InlineKeyboardButton(text=name_info, callback_data=f'event_{event.id}')
-#         ],
-#             [
-#                 InlineKeyboardButton(text=when_info, callback_data=f'event_{event.id}'),
-#                 InlineKeyboardButton(text='✅', callback_data=f'event_choose_{event.id}'),
-#                 InlineKeyboardButton(text='❔', callback_data=f'event_about_{event.id}'),
-#             ]]
-#         inline_keyboard += event_keyboard
-#     events_keyboard = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+async def get_event_schedule_keyboard(event):
+    presentations = await sync_to_async(Presentation.objects.filter(event=event).select_related)('speaker')
+    inline_keyboard = []
+    async for presentation in presentations:
+        when_info = f'{presentation.start_time.strftime("%H:%M")} - {presentation.end_time.strftime("%H:%M")}'
+        speaker_info = f'{presentation.speaker.first_name} {presentation.speaker.last_name}'
+        name_info = f'{presentation.name}'
+        presentation_keyboard = [
+            [
+                InlineKeyboardButton(text=speaker_info, callback_data='none'),
+                InlineKeyboardButton(text=when_info, callback_data='none'),
+            ],
+            [
+                InlineKeyboardButton(text=name_info, callback_data=f'presentation_{presentation.pk}')
+            ],
+        ]
+        inline_keyboard += presentation_keyboard
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
 
+async def get_current_presentation_keyboard(presentation, speaker):
+    questions_count = await sync_to_async(presentation.questions.filter(presentation=presentation).count)()
+    inline_keyboard = []
+    if questions_count:
+        ask_keyboard = [
+            [
+                InlineKeyboardButton(
+                    text=f'Посмотреть вопросы (всего: {questions_count})',
+                    callback_data=f'questions_show_{presentation.pk}'),
+            ],
+        ]
+        inline_keyboard += ask_keyboard
+
+    if speaker:
+        speaker_keyboard = [
+            [
+                InlineKeyboardButton(text='Завершить доклад', callback_data=f'presentation_finish_{presentation.pk}'),
+
+            ],
+        ]
+        inline_keyboard += speaker_keyboard
+    else:
+        ask_keyboard = [
+            [
+                InlineKeyboardButton(text='Задать вопрос', callback_data=f'question_ask_{presentation.pk}'),
+            ],
+        ]
+        inline_keyboard += ask_keyboard
+    main_menu_keyboard = [
+        [
+            InlineKeyboardButton(text='Главное меню', callback_data=f'main_menu'),
+        ],
+    ]
+    inline_keyboard += main_menu_keyboard
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
 
+async def get_current_presentation_question_keyboard(question, chat_id, speaker):
+    question = question
+    exists_like = await sync_to_async(Likes.objects.filter(client__chat_id=chat_id).exists)()
+    inline_keyboard = []
+
+    if speaker:
+        inline_keyboard.append([
+            InlineKeyboardButton(text='Закрыть вопрос', callback_data=f'question_close_{question.pk}'),
+        ])
+    else:
+        if exists_like:
+            inline_keyboard.append([
+                InlineKeyboardButton(text='✅ Вы уже поддержали данный вопрос', callback_data='none'),
+            ])
+        else:
+            inline_keyboard.append([
+                InlineKeyboardButton(text='👍 Поддержать вопрос', callback_data=f'question_like_{question.pk}'),
+            ])
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
 
+async def get_question_main_menu_keyboard(presentation_id, speaker):
+    if speaker:
+        inline_keyboard = [
+            [
+                InlineKeyboardButton(text='Обновить список вопросов', callback_data=f'question_update_{presentation_id}'),
+            ],
+            [
+                InlineKeyboardButton(text='Завершить доклад', callback_data=f'presentation_finish_{presentation_id}'),
+            ],
+            [
+                InlineKeyboardButton(text='Главное меню', callback_data=f'main_menu'),
+            ],
+        ]
+    else:
+        inline_keyboard = [
+            [
+                InlineKeyboardButton(text='Задать свой вопрос', callback_data=f'question_ask_{presentation_id}'),
+            ],
+            [
+                InlineKeyboardButton(text='Главное меню', callback_data=f'main_menu'),
+            ],
+        ]
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
 if __name__ == '__main__':
     today = datetime.today()
-    user_events = Client.objects.filter(pk=18, events__date__gte=today).distinct().values_list('events', flat=True)
-    exist_other_events = Event.objects.exclude(pk__in=user_events)
-    print(exist_other_events)
-    print(user_events)
+    presentations = Presentation.objects.filter(event=1)
+    print(presentations)

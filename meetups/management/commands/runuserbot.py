@@ -17,8 +17,13 @@ from meetups.models import (
 )
 from asgiref.sync import sync_to_async
 from conf import settings
-from meetups.management.commands.database import db_start, get_user_presentations, get_user_events
-from meetups.management.commands.user_keyboards import get_user_main_keyboard
+from meetups.management.commands.user_keyboards import (
+    get_user_main_keyboard,
+    get_event_schedule_keyboard,
+    get_current_presentation_keyboard,
+    get_current_presentation_question_keyboard,
+    get_question_main_menu_keyboard,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,68 +43,16 @@ user_register_keyboard = InlineKeyboardMarkup(inline_keyboard=[
 ])
 
 
-speaker_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-    [
-        InlineKeyboardButton(text='Мои презентации', callback_data='my_presentations'),
-    ],
-])
-
-async def on_startup(dp):
-    await db_start()
-
-
 class ClientRegisterFSM(StatesGroup):
     choose_event = State()
     personal_info = State()
 
-
-# async def is_speaker(user_id):
-#     presentations = await sync_to_async(Presentation.objects.all)()
-#     speakers = []
-#     async for presentation in presentations:
-#         speaker_id = await sync_to_async(lambda: presentation.speaker.chat_id)()
-#         await sync_to_async(speakers.append)(speaker_id)
-#     if str(user_id) in speakers:
-#         return True
-
-
-# async def get_user_main_keyboard(client):
-#     inline_keyboard = []
-#
-#     today = datetime.today()
-#     now = datetime.now()
-#     current_event = await sync_to_async(Event.objects.filter(date__gte=today).first)()
-#
-#
-#     if current_event:
-#         first_row = [
-#             InlineKeyboardButton(text='Программа', callback_data='show_schedule'),
-#         ]
-#         inline_keyboard.append(first_row)
-#
-#     inline_keyboard.append([
-#         InlineKeyboardButton(text='Сделать донат', callback_data='donate'),
-#     ])
-#     return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
 @dp.message_handler(commands=['start'])
 async def start_command(message: types.Message) -> None:
     client, created = await sync_to_async(Client.objects.get_or_create)(
         chat_id=message.from_user.id,
     )
-    # if await is_speaker(message.from_user.id):
-    #     await message.answer('🤖 Добро пожаловать в чат-бот\n<b>Python Meetups!</b>\n\n'
-    #                          'Так как вы являетесь докладчиком на некоторых меропрятиях,'
-    #                          ' то вы можете:\n\n'
-    #                          '👀 посмотреть вопросы от зрителей вашей презентации,\n\n'
-    #                          '✅ быстро <b>зарегистрироваться</b> на мероприятие,\n\n'
-    #                          '📖 легко ознакомиться с <b>программой</b>,\n\n'
-    #                          '❓<b>задавать вопросы</b> другим докладчикам\n\n'
-    #                          '💰а также поддержать нас, отправив донат.\n\n'
-    #                          ,
-    #                          parse_mode='HTML',
-    #                          reply_markup=speaker_keyboard,
-    #                          )
     if created or not client.first_name or not client.last_name:
         await message.answer('🤖 Добро пожаловать в чат-бот\n<b>Python Meetups!</b>\n\n'
                              'Я помогу вам получить 💪 максимум от каждого события.\n'
@@ -108,13 +61,13 @@ async def start_command(message: types.Message) -> None:
                              '📖 легко ознакомиться с <b>программой</b>,\n\n'
                              '❓<b>задавать вопросы</b> докладчикам\n\n'
                              '💰а также поддержать нас, отправив донат.\n\n'
+                             'Если вы выступаете на мероприятии, то вы также сможете '
+                             '👀 посмотреть вопросы от зрителей вашей презентации\n\n'
                              '🎫 Чтобы начать работу с ботом необходимо зарегистрироваться.',
                             parse_mode='HTML',
                             reply_markup=user_register_keyboard,
                             )
     else:
-        # await get_user_presentations(client.pk)
-        # await get_user_events(client.pk)
         user_main_keyboard = await get_user_main_keyboard(client)
         await message.answer('Вы перешли в главное меню.',
                              parse_mode='HTML',
@@ -175,6 +128,21 @@ async def event_choose_handler(callback: types.CallbackQuery, state: FSMContext)
                                       )
 
 
+@dp.callback_query_handler(lambda callback_query: callback_query.data == 'show_schedule', state='*')
+async def show_schedule_handler(callback: types.CallbackQuery) -> None:
+    today = datetime.today()
+    now = datetime.now()
+    current_event = await sync_to_async(Event.objects.filter(date=today, start_time__lte=now.time()).first)()
+    await callback.message.answer(f'<b>{current_event.name}</b>\n\n'
+                                  f'<em>Нажмите на название доклада, чтобы '
+                                  f'📖 прочитать о нем подробнее или '
+                                  f'🙋‍♂️задать вопрос докладчику.</em>\n\n'
+                                  f'🕓 РАСПИСАНИЕ НА СЕГОДНЯ:',
+                                  parse_mode='HTML',
+                                  reply_markup=await get_event_schedule_keyboard(current_event),
+                                  )
+
+
 @dp.message_handler(state=ClientRegisterFSM.personal_info)
 async def user_register_personal_info_handler(message: types.Message, state: FSMContext) -> None:
     if message.text.count(' ') != 1:
@@ -202,67 +170,82 @@ async def user_register_personal_info_handler(message: types.Message, state: FSM
     await state.finish()
 
 
-def display_presentations(presentations):
-    if presentations:
-        my_presentations_keyboard = []
-        presentations_details = []
-        number = 1
-        for presentation in presentations:
-            presentation_button = [
-                    InlineKeyboardButton(
-                        text=f'{number}',
-                        callback_data=f'questions_{presentation.id}'),
-                ]
-            my_presentations_keyboard.append(presentation_button)
-            presentations_details.append(
-                f'<b>{number}.</b>\n'
-                f'<b>Название:</b>\n {presentation.name}\n'
-                f'<b>Мероприятие:</b>\n {presentation.event}\n'
-            )
-            number += 1
-        presentations_details.append(
-            'Нажмите на кнопку с соответствующим номером презентации, чтобы посмотреть вопросы к ней.'
-        )
+@dp.callback_query_handler(lambda callback_query: callback_query.data == 'show_current_presentation', state='*')
+async def show_current_presentation_handler(callback: types.CallbackQuery) -> None:
+    today = datetime.today()
+    now = datetime.now()
+    current_event = await sync_to_async(Event.objects.filter(date=today, start_time__lte=now.time()).first)()
+    if current_event:
+        current_presentation = await sync_to_async(Presentation.objects.filter(
+            event=current_event,
+            start_time__lte=now.time(),
+            is_finished=False,
+        ).select_related('speaker').first)()
+    speaker_chat_id = current_presentation.speaker.chat_id
+    speaker = int(speaker_chat_id) == int(callback.from_user.id)
+    logger.info(f'speaker: {speaker}')
+    texts = {
+        'True': f'CЕЙЧАС ИДЕТ ВАШ ДОКЛАД:\n\n'
+               f'<b>{current_presentation.name}</b>\n\n'
+               f'<b>Докладчик</b>\n'
+               f'{current_presentation.speaker.first_name} {current_presentation.speaker.last_name}\n\n'
+               f'<em>Здесь вы можете посмотреть вопросы'
+               f' или завершить доклад</em>',
+        'False': f'CЕЙЧАС ИДЕТ ДОКЛАД:\n\n'
+               f'<b>{current_presentation.name}</b>\n\n'
+               f'<b>Описание:</b>\n'
+               f'{current_presentation.annotation}\n\n'
+               f'<b>Докладчик</b>\n'
+               f'{current_presentation.speaker.first_name} {current_presentation.speaker.last_name}\n\n'\
+               f'<em>Здесь вы можете задать вопрос докладчику'
+               f' или посмотреть заданные ранее вопросы и'
+               f'  поддержать интересные вам, нажав на 👍</em>\n\n'
+    }
+    await callback.message.answer(texts[str(speaker)],
+                                  parse_mode='HTML',
+                                  reply_markup=await get_current_presentation_keyboard(
+                                      current_presentation,
+                                      speaker,
+                                  ),
+                                  )
 
-        return my_presentations_keyboard, presentations_details
-
-
-@dp.callback_query_handler(lambda callback_query: callback_query.data == 'my_presentations')
-async def my_presentations_handler(callback: types.CallbackQuery) -> None:
-    user_id = callback.from_user.id
-    speaker = await sync_to_async(Client.objects.get)(chat_id=user_id)
-    speaker_presentations = await sync_to_async(Presentation.objects.filter)(speaker_id=speaker.id)
-    my_presentations_keyboard, presentations_details = await sync_to_async(display_presentations)(speaker_presentations)
-    presentations_keyboard = InlineKeyboardMarkup(inline_keyboard=my_presentations_keyboard)
-
-    await callback.message.edit_text('\n'.join(presentations_details),
-                                     parse_mode='HTML',
-                                     reply_markup=presentations_keyboard,
-                                     )
-
-
-def get_questions_details(questions):
-    questions_details = []
-    for question in questions:
-        questions_details.append(
-            f'<b>Вопрос от:</b>\n{str(question.client).split(": ")[-1]}\n'
-            f'<b>Текст:</b>\n{question.text}'
-        )
-    return questions_details
-
-
-
-@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('questions_'))
-async def my_presentations_handler(callback: types.CallbackQuery) -> None:
+@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('questions_show'), state='*')
+async def show_current_presentation_questions_handler(callback: types.CallbackQuery) -> None:
     presentation_id = callback.data.split('_')[-1]
-    presentation = await sync_to_async(Presentation.objects.get)(id=presentation_id)
-    questions = await sync_to_async(Question.objects.filter)(presentation=presentation_id)
-    questions_details = await sync_to_async(get_questions_details)(questions)
-    await callback.message.edit_text('\n'.join(questions_details),
-                                     parse_mode='HTML',
-                                     )
+    questions = await sync_to_async(
+        Question.objects.filter(
+            presentation=presentation_id,
+        ).all().select_related('presentation').select_related('client').prefetch_related)('likes')
+    presentation = await sync_to_async(
+        Presentation.objects.filter(pk=presentation_id).select_related('speaker').first
+    )()
+    speaker_chat_id = presentation.speaker.chat_id
+    speaker = int(speaker_chat_id) == int(callback.from_user.id)
+    async for question in questions:
+        likes_count = await sync_to_async(question.likes.count)()
+        await callback.message.answer(f'<b>{question.presentation.name}:</b>\n\n'
+                                      f'{question.text}\n\n'
+                                      f'👍 <em>{likes_count}</em>',
+                                      parse_mode='HTML',
+                                      reply_markup=await get_current_presentation_question_keyboard(
+                                        question,
+                                        callback.from_user.id,
+                                        speaker,
+                                      ),
+                                    )
+    texts = {
+        'True': f'Не забывайте иногда <b>обновлять список вопросов</b>, чтобы не пропустить новые!',
+        'False': f'gfg Вы также можете задать свой вопрос или вернуться в главное меню:'
+    }
+    await callback.message.answer(texts[str(speaker)],
+                                  parse_mode='HTML',
+                                  reply_markup=await get_question_main_menu_keyboard(
+                                      presentation_id,
+                                      speaker,
+                                  ),
+                                  )
 
 
 class Command(BaseCommand):
     def handle(self, *args, **kwargs):
-        executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
+        executor.start_polling(dp, skip_updates=True)
