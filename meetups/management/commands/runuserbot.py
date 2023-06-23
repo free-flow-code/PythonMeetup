@@ -429,12 +429,15 @@ async def get_event_about_handler(callback: types.CallbackQuery) -> None:
 @dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('question_contacts'), state='*')
 async def get_question_contacts_handler(callback: types.CallbackQuery) -> None:
     question_id = callback.data.split('_')[-1]
-    question = await sync_to_async(Question.objects.filter(id=question_id).select_related('presentation').first)()
-    likes = await sync_to_async(Likes.objects.filter)(question__pk=question_id)
+    question = await sync_to_async(
+        Question.objects.filter(id=question_id).select_related('presentation').select_related('client').first
+    )()
+    likes = await sync_to_async(Likes.objects.filter(question__pk=question_id).select_related)('client')
     presentation = question.presentation
-    text = []
+    text = f'{question.text}\n\n'
     async for like in likes:
-        text.append(f'{like.question.text}\n\n{like.client.first_name} {like.client.last_name}, tg: {like.client.chat_id}\n\n')
+        text += f'{like.client.first_name} {like.client.last_name}, tg: {like.client.chat_id}\n\n'
+    text += f'{question.client.first_name} {question.client.last_name}, tg: {question.client.chat_id}'
     await callback.message.edit_text(text,
                                      parse_mode='HTML',
                                      reply_markup=await get_question_contacts_keyboard(presentation),
