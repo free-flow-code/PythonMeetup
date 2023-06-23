@@ -66,7 +66,6 @@ class Presentation(models.Model):
 
 
 class Question(models.Model):
-    title = models.CharField(max_length=50, verbose_name='Заголовок вопроса')
     text = models.TextField(verbose_name='Текст вопроса')
     presentation = models.ForeignKey(Presentation, on_delete=models.CASCADE, verbose_name='Презентация', related_name='questions')
     client = models.ForeignKey(Client, on_delete=models.CASCADE, verbose_name='Клиент', related_name='questions')

@@ -235,7 +235,7 @@ async def show_current_presentation_questions_handler(callback: types.CallbackQu
                                     )
     texts = {
         'True': f'Не забывайте иногда <b>обновлять список вопросов</b>, чтобы не пропустить новые!',
-        'False': f'gfg Вы также можете задать свой вопрос или вернуться в главное меню:'
+        'False': f'Вы также можете задать свой вопрос или вернуться в главное меню:'
     }
     await callback.message.answer(texts[str(speaker)],
                                   parse_mode='HTML',
