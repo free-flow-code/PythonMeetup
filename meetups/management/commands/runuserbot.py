@@ -26,6 +26,7 @@ from meetups.management.commands.user_keyboards import (
     get_current_presentation_question_keyboard,
     get_question_main_menu_keyboard,
     get_cancel_keyboard,
+    get_just_main_menu_keyboard,
 )
 
 logging.basicConfig(
@@ -76,7 +77,7 @@ async def start_command(message: types.Message) -> None:
                             )
     else:
         user_main_keyboard = await get_user_main_keyboard(client)
-        await message.answer('Вы перешли в главное меню.',
+        await message.answer('🤖 ГЛАВНОЕ МЕНЮ:',
                              parse_mode='HTML',
                              reply_markup=user_main_keyboard,
                              )
@@ -324,12 +325,44 @@ async def ask_question_handler(callback: types.CallbackQuery) -> None:
 
 
 @dp.callback_query_handler(lambda callback_query: callback_query.data == 'main_menu', state='*')
-async def get_main_menu_handler(callback: types.CallbackQuery) -> None:
+async def get_main_menu_handler(callback: types.CallbackQuery, state: FSMContext) -> None:
     client = await sync_to_async(Client.objects.get)(chat_id=callback.from_user.id)
+    await state.finish()
     await callback.message.answer('🤖 ГЛАВНОЕ МЕНЮ:',
                                   parse_mode='HTML',
                                   reply_markup=await get_user_main_keyboard(client),
                                   )
+
+
+@dp.callback_query_handler(lambda callback_query: callback_query.data == 'about', state='*')
+async def get_main_menu_handler(callback: types.CallbackQuery) -> None:
+    client = await sync_to_async(Client.objects.get)(chat_id=callback.from_user.id)
+    text = """
+СЛУШАТЕЛИ МОГУТ:\n
+📖 ознакомиться с программой:\n <b>ГЛАВНОЕ МЕНЮ -> Программа</b>;\n\n
+❓задавать вопросы докладчикам:\n <b>ГЛАВНОЕ МЕНЮ -> Текущий доклад -> Задать вопрос</b>;\n\n
+👍 посмотреть вопросы других участников и поддержать те из них, которые вас тоже интересуют:
+<b>ГЛАВНОЕ МЕНЮ -> Текущий доклад -> Посмотреть вопросы -> 👍 Поддержать вопрос</b>;\n\n
+📆 посмотреть мероприятия, на которые вы зарегистрированы:
+<b>ГЛАВНОЕ МЕНЮ -> Мои мероприятия</b>\n
+<em>если кнопки <b>Мои мероприятия</b> нет, значит вы не зарегистрированы ни на одно мероприятие, прошедшие мероприятия не учитываются</em>;\n\n
+✅ зарегистрироваться на новое мероприятие:
+<b>ГЛАВНОЕ МЕНЮ -> Другие мероприятия</b>\n
+<em>если кнопки <b>Другие мероприятия</b> нет, значит пока нет мероприятий, на которые вы могли бы зарегистрироваться</em>;\n\n
+💰поддержать нас, отправив донат:
+<b>ГЛАВНОЕ МЕНЮ -> Сделать донат</b>;\n\n
+ДОКЛАДЧИКИ ТАКЖЕ МОГУТ:\n
+👀 посмотреть вопросы от участников мероприятия:
+<b>ГЛАВНОЕ МЕНЮ -> Текущий доклад -> Посмотреть вопросы;</b>\n\n
+🎫 посмотреть контакты людей, задавших вопросы:
+<b>ГЛАВНОЕ МЕНЮ -> Текущий доклад -> Посмотреть вопросы -> Посмотреть контакты;</b>\n\n
+⏰ завершить доклад, чтобы участники смогли отправлять вопросы следующему докладчику:
+<b>ГЛАВНОЕ МЕНЮ -> Текущий доклад -> Завершить доклад;</b>\n\n
+"""
+    await callback.message.edit_text(text,
+                                     parse_mode='HTML',
+                                     reply_markup=await get_just_main_menu_keyboard(),
+                                     )
 
 
 class Command(BaseCommand):

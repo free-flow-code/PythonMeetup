@@ -23,6 +23,16 @@ async def get_cancel_keyboard():
     ]
     return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
+
+async def get_just_main_menu_keyboard():
+    inline_keyboard = [
+        [
+            InlineKeyboardButton(text='Главное меню', callback_data='main_menu'),
+        ],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+
+
 async def get_user_main_keyboard(client):
     inline_keyboard=[]
 
