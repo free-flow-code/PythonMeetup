@@ -312,16 +312,25 @@ async def ask_question_handler(callback: types.CallbackQuery) -> None:
         client=client,
         question=question,
     )
-    await callback.message.edit_text(f'<b>Вопрос №{question.question_number}:</b> 👍 {increased_likes_number}\n'
-                              f'--------------------------------------\n\n'
-                              f'{question.text}\n\n',
-                              parse_mode='HTML',
-                              reply_markup=await get_current_presentation_question_keyboard(
-                                  question,
-                                  callback.from_user.id,
-                                  False,
-                              ),
-                              )
+    await callback.message.edit_text(f'<b>Вопрос №{question.question_number}:</b> 👍 {increased_likes_number}\n\n'
+                                     f'{question.text}\n\n',
+                                     parse_mode='HTML',
+                                     reply_markup=await get_current_presentation_question_keyboard(
+                                         question,
+                                         callback.from_user.id,
+                                         speaker=False,
+                                     ),
+                                     )
+
+
+@dp.callback_query_handler(lambda callback_query: callback_query.data == 'main_menu', state='*')
+async def get_main_menu_handler(callback: types.CallbackQuery) -> None:
+    client = await sync_to_async(Client.objects.get)(chat_id=callback.from_user.id)
+    await callback.message.answer('🤖 ГЛАВНОЕ МЕНЮ:',
+                                  parse_mode='HTML',
+                                  reply_markup=await get_user_main_keyboard(client),
+                                  )
+
 
 class Command(BaseCommand):
     def handle(self, *args, **kwargs):

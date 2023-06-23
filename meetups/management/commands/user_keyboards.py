@@ -164,7 +164,7 @@ async def get_current_presentation_question_keyboard(question, chat_id, speaker)
             inline_keyboard.append([
                 InlineKeyboardButton(text='👍 Поддержать вопрос', callback_data=f'question_like_{question.pk}'),
             ])
-    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard, row_width=2)
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
 
 async def get_question_main_menu_keyboard(presentation_id, speaker):
