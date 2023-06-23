@@ -228,9 +228,11 @@ async def show_current_presentation_questions_handler(callback: types.CallbackQu
     speaker = int(speaker_chat_id) == int(callback.from_user.id)
     async for question in questions:
         likes_count = await sync_to_async(question.likes.count)()
-        await callback.message.answer(f'<b>{question.presentation.name}:</b>\n\n'
+        await callback.message.answer(f'<b>Вопрос №{question.question_number}:</b>\n'
+                                      f'--------------------------------------\n\n'
                                       f'{question.text}\n\n'
-                                      f'👍 <em>{likes_count}</em>',
+                                      f'👍 <b>{likes_count}</b>\n\n'
+                                      f'<em>{question.presentation.name}</em>',
                                       parse_mode='HTML',
                                       reply_markup=await get_current_presentation_question_keyboard(
                                         question,
@@ -264,7 +266,7 @@ async def ask_question_handler(callback: types.CallbackQuery, state: FSMContext)
 
 
 @dp.message_handler(state=ClientAskQuestionFSM.enter_question)
-async def entered_question_handler(message: types.Message, state: FSMContext) -> None:
+async def save_question_handler(message: types.Message, state: FSMContext) -> None:
     async with state.proxy() as data:
         presentation_id = data['presentation_id']
     await sync_to_async(Question.objects.create)(
