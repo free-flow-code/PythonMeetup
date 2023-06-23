@@ -26,7 +26,8 @@ from meetups.management.commands.user_keyboards import (
     get_current_presentation_question_keyboard,
     get_question_main_menu_keyboard,
     get_cancel_keyboard,
-    get_just_main_menu_keyboard,
+    get_just_main_menu_keyboard, get_presentation_annotation_keyboard, get_show_my_events_keyboard,
+    get_question_contacts_keyboard,
 )
 
 logging.basicConfig(
@@ -141,14 +142,13 @@ async def show_schedule_handler(callback: types.CallbackQuery) -> None:
     today = datetime.today()
     now = datetime.now()
     current_event = await sync_to_async(Event.objects.filter(date=today, start_time__lte=now.time()).first)()
-    await callback.message.answer(f'<b>{current_event.name}</b>\n\n'
-                                  f'<em>Нажмите на название доклада, чтобы '
-                                  f'📖 прочитать о нем подробнее или '
-                                  f'🙋‍♂️задать вопрос докладчику.</em>\n\n'
-                                  f'🕓 РАСПИСАНИЕ НА СЕГОДНЯ:',
-                                  parse_mode='HTML',
-                                  reply_markup=await get_event_schedule_keyboard(current_event),
-                                  )
+    await callback.message.edit_text(f'<b>{current_event.name}</b>\n\n'
+                                     f'<em>Нажмите на название доклада, чтобы '
+                                     f'📖 прочитать о нем подробнее</em>\n\n'
+                                     f'🕓 РАСПИСАНИЕ НА СЕГОДНЯ:',
+                                     parse_mode='HTML',
+                                     reply_markup=await get_event_schedule_keyboard(current_event),
+                                     )
 
 
 @dp.message_handler(state=ClientRegisterFSM.personal_info)
@@ -368,6 +368,76 @@ async def get_main_menu_handler(callback: types.CallbackQuery) -> None:
     await callback.message.edit_text(text,
                                      parse_mode='HTML',
                                      reply_markup=await get_just_main_menu_keyboard(),
+                                     )
+
+
+@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('presentation_annotation'), state='*')
+async def get_presentation_annotation_handler(callback: types.CallbackQuery) -> None:
+    presentation_id = callback.data.split('_')[-1]
+    presentation = await sync_to_async(
+        Presentation.objects.filter(pk=presentation_id).select_related('speaker').first
+    )()
+    text = f'<b>{presentation.name.upper()}</b>\n\n'\
+           f'{presentation.annotation}\n\n'\
+           f'<b>Докладчик</b>\n'\
+           f'{presentation.speaker.first_name} {presentation.speaker.last_name}\n\n'\
+           f'<b>Время</b>\n'\
+           f'{presentation.start_time.strftime("%H:%M")} - {presentation.end_time.strftime("%H:%M")}'
+
+    await callback.message.edit_text(text,
+                                     parse_mode='HTML',
+                                     reply_markup=await get_presentation_annotation_keyboard(),
+                                     )
+
+
+@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('show_my_events'), state='*')
+async def get_show_my_events_handler(callback: types.CallbackQuery) -> None:
+    today = datetime.today()
+    client = await sync_to_async(Client.objects.get)(chat_id=callback.from_user.id)
+    user_events_ids = await sync_to_async(
+        Client.objects.filter(pk=client.pk, events__date__gte=today).distinct().values_list)('events', flat=True)
+    user_events_ids = await sync_to_async(list)(user_events_ids)
+    user_events = await sync_to_async(Event.objects.filter)(pk__in=user_events_ids)
+    inline_keyboard = []
+    async for event in user_events:
+        when_info = f'{event.date.strftime("%d.%m")} {event.start_time.strftime("%H:%M")}'
+        name_info = f'{event.name}'
+        event_keyboard=[[
+            InlineKeyboardButton(text=name_info, callback_data=f'event_{event.id}')
+        ],
+        [
+            InlineKeyboardButton(text=when_info, callback_data=f'event_{event.id}'),
+            InlineKeyboardButton(text='❔', callback_data=f'event_about_{event.id}'),
+        ]]
+        inline_keyboard += event_keyboard
+    events_keyboard = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+    await callback.message.edit_text('Вы можете посмотреть описание мероприятия, нажав на знак вопроса -❔',
+                                     parse_mode='HTML',
+                                     reply_markup=events_keyboard,
+                                    )
+
+@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('event_about'), state='*')
+async def get_event_about_handler(callback: types.CallbackQuery) -> None:
+    event_id = callback.data.split('_')[-1]
+    event = await sync_to_async(Event.objects.get)(id=event_id)
+    await callback.message.edit_text(event.description,
+                                     parse_mode='HTML',
+                                     reply_markup=await get_show_my_events_keyboard(),
+                                     )
+
+
+@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('question_contacts'), state='*')
+async def get_question_contacts_handler(callback: types.CallbackQuery) -> None:
+    question_id = callback.data.split('_')[-1]
+    question = await sync_to_async(Question.objects.filter(id=question_id).select_related('presentation').first)()
+    likes = await sync_to_async(Likes.objects.filter)(question__pk=question_id)
+    presentation = question.presentation
+    text = []
+    async for like in likes:
+        text.append(f'{like.question.text}\n\n{like.client.first_name} {like.client.last_name}, tg: {like.client.chat_id}\n\n')
+    await callback.message.edit_text(text,
+                                     parse_mode='HTML',
+                                     reply_markup=await get_question_contacts_keyboard(presentation),
                                      )
 
 

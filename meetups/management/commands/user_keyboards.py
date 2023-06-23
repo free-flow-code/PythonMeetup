@@ -68,7 +68,7 @@ async def get_user_main_keyboard(client):
             InlineKeyboardButton(text='Мои доклады', callback_data='show_my_presentations'),
         ])
     user_events_ids = await sync_to_async(
-        Client.objects.filter(pk=18,events__date__gte=today).distinct().values_list)('events', flat=True)
+        Client.objects.filter(pk=client.pk,events__date__gte=today).distinct().values_list)('events', flat=True)
     user_events_ids = await sync_to_async(list)(user_events_ids)
     exist_other_events = await sync_to_async(Event.objects.exclude(pk__in=user_events_ids).exists)()
     events_row = []
@@ -103,7 +103,7 @@ async def get_event_schedule_keyboard(event):
                 InlineKeyboardButton(text=when_info, callback_data='none'),
             ],
             [
-                InlineKeyboardButton(text=name_info, callback_data=f'presentation_{presentation.pk}')
+                InlineKeyboardButton(text=name_info, callback_data=f'presentation_annotation_{presentation.pk}')
             ],
         ]
         inline_keyboard += presentation_keyboard
@@ -159,6 +159,7 @@ async def get_current_presentation_question_keyboard(question, chat_id, speaker)
     if speaker:
         inline_keyboard.append([
             InlineKeyboardButton(text='Закрыть вопрос', callback_data=f'question_close_{question.pk}'),
+            InlineKeyboardButton(text='Контакты', callback_data=f'question_contacts_{question.pk}'),
         ])
     elif author:
         inline_keyboard.append([
@@ -202,6 +203,40 @@ async def get_question_main_menu_keyboard(presentation_id, speaker):
     return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
 
+async def get_presentation_annotation_keyboard():
+    inline_keyboard = [
+        [
+            InlineKeyboardButton(text='Программа', callback_data='show_schedule'),
+        ],
+        [
+            InlineKeyboardButton(text='Главное меню', callback_data='main_menu'),
+        ],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+
+
+async def get_show_my_events_keyboard():
+    inline_keyboard = [
+        [
+            InlineKeyboardButton(text='Мои мероприятия', callback_data='show_my_events'),
+        ],
+        [
+            InlineKeyboardButton(text='Главное меню', callback_data='main_menu'),
+        ],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+
+
+async def get_question_contacts_keyboard(presentation):
+    inline_keyboard = [
+        [
+            InlineKeyboardButton(text='К списку вопросов', callback_data=f'questions_show_{presentation.pk}'),
+        ],
+        [
+            InlineKeyboardButton(text='Главное меню', callback_data='main_menu'),
+        ],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
 
 if __name__ == '__main__':
