@@ -8,6 +8,8 @@ from django.core.management.base import BaseCommand
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from django.db.models import Count
+
 from meetups.models import (
     Client,
     Event,
@@ -228,11 +230,10 @@ async def show_current_presentation_questions_handler(callback: types.CallbackQu
     speaker = int(speaker_chat_id) == int(callback.from_user.id)
     async for question in questions:
         likes_count = await sync_to_async(question.likes.count)()
-        await callback.message.answer(f'<b>Вопрос №{question.question_number}:</b>\n'
+        await callback.message.answer(f'<b>Вопрос №{question.question_number}:</b> 👍 {likes_count}\n'
                                       f'--------------------------------------\n\n'
-                                      f'{question.text}\n\n'
-                                      f'👍 <b>{likes_count}</b>\n\n'
-                                      f'<em>{question.presentation.name}</em>',
+                                      f'{question.text}\n\n',
+                                      # f'<em>{question.presentation.name}</em>',
                                       parse_mode='HTML',
                                       reply_markup=await get_current_presentation_question_keyboard(
                                         question,
@@ -269,10 +270,15 @@ async def ask_question_handler(callback: types.CallbackQuery, state: FSMContext)
 async def save_question_handler(message: types.Message, state: FSMContext) -> None:
     async with state.proxy() as data:
         presentation_id = data['presentation_id']
+    presentation = await sync_to_async(
+        Presentation.objects.filter(pk=presentation_id).annotate(num_questions=Count('questions')).first
+    )()
+    question_number = presentation.num_questions + 1
     await sync_to_async(Question.objects.create)(
         client=await sync_to_async(Client.objects.get)(chat_id=message.from_user.id),
-        presentation=await sync_to_async(Presentation.objects.get)(pk=presentation_id),
+        presentation=presentation,
         text=message.text,
+        question_number=question_number,
     )
     client = await sync_to_async(Client.objects.get)(chat_id=message.from_user.id)
     await message.answer('Ваш вопрос отправлен докладчику!',
