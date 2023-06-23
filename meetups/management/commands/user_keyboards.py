@@ -162,19 +162,19 @@ async def get_current_presentation_question_keyboard(question, chat_id, speaker)
         ])
     elif author:
         inline_keyboard.append([
-            InlineKeyboardButton(text='🔥 Вы автор данного вопроса', callback_data='none'),
+            # InlineKeyboardButton(text='🔥 Вы автор данного вопроса', callback_data='none'),
         ])
     else:
         logger.info(f'exists_like - {exists_user_like}')
         if exists_user_like:
             inline_keyboard.append([
-                InlineKeyboardButton(text='✅ Вы уже поддержали данный вопрос', callback_data='none'),
+                # InlineKeyboardButton(text='✅ Вы уже поддержали данный вопрос', callback_data='none'),
             ])
         else:
             inline_keyboard.append([
                 InlineKeyboardButton(text='👍 Поддержать вопрос', callback_data=f'question_like_{question.pk}'),
             ])
-    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard, row_width=2)
 
 
 async def get_question_main_menu_keyboard(presentation_id, speaker):

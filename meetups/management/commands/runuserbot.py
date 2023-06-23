@@ -231,10 +231,16 @@ async def show_current_presentation_questions_handler(callback: types.CallbackQu
     speaker = int(speaker_chat_id) == int(callback.from_user.id)
     async for question in questions:
         likes_count = await sync_to_async(question.likes.count)()
-        await callback.message.answer(f'<b>Вопрос №{question.question_number}:</b> 👍 {likes_count}\n'
-                                      f'--------------------------------------\n\n'
-                                      f'{question.text}\n\n',
-                                      # f'<em>{question.presentation.name}</em>',
+        author = int(question.client.chat_id) == int(callback.from_user.id)
+        texts = {
+            'True': f'<b>Вопрос №{question.question_number}:</b> ✏ 👍 {likes_count}\n'
+                    f'--------------------------------------\n'
+                    f'{question.text}\n\n',
+            'False': f'<b>Вопрос №{question.question_number}:</b> 👍 {likes_count}\n'
+                     f'--------------------------------------\n'
+                    f'{question.text}\n\n',
+        }
+        await callback.message.answer(texts[str(author)],
                                       parse_mode='HTML',
                                       reply_markup=await get_current_presentation_question_keyboard(
                                         question,
@@ -291,7 +297,7 @@ async def save_question_handler(message: types.Message, state: FSMContext) -> No
 
 
 @dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('question_like'), state='*')
-async def ask_question_handler(callback: types.CallbackQuery) -> None:
+async def like_question_handler(callback: types.CallbackQuery) -> None:
     question_id = callback.data.split('_')[-1]
     client = await sync_to_async(Client.objects.get)(chat_id=callback.from_user.id)
     question = await sync_to_async(
