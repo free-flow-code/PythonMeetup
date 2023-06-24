@@ -182,7 +182,7 @@ async def get_question_main_menu_keyboard(presentation_id, speaker):
     if speaker:
         inline_keyboard = [
             [
-                InlineKeyboardButton(text='Обновить список вопросов', callback_data=f'question_update_{presentation_id}'),
+                InlineKeyboardButton(text='Обновить список вопросов', callback_data=f'questions_show_{presentation_id}'),
             ],
             [
                 InlineKeyboardButton(text='Завершить доклад', callback_data=f'presentation_finish_{presentation_id}'),

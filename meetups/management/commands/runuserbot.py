@@ -410,6 +410,12 @@ async def get_show_my_events_handler(callback: types.CallbackQuery) -> None:
             InlineKeyboardButton(text='❔', callback_data=f'event_about_{event.id}'),
         ]]
         inline_keyboard += event_keyboard
+    main_menu_keyboard = [
+        [
+            InlineKeyboardButton(text='Главное меню', callback_data='main_menu'),
+        ],
+    ]
+    inline_keyboard += main_menu_keyboard
     events_keyboard = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
     await callback.message.edit_text('Вы можете посмотреть описание мероприятия, нажав на знак вопроса -❔',
                                      parse_mode='HTML',
@@ -442,6 +448,30 @@ async def get_question_contacts_handler(callback: types.CallbackQuery) -> None:
                                      parse_mode='HTML',
                                      reply_markup=await get_question_contacts_keyboard(presentation),
                                      )
+
+
+@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('presentation_finish'), state='*')
+async def get_presentation_finish_handler(callback: types.CallbackQuery) -> None:
+    presentation_id = callback.data.split('_')[-1]
+    presentation = await sync_to_async(
+        Presentation.objects.filter(pk=presentation_id).first
+    )()
+    presentation.is_finished = True
+    await sync_to_async(presentation.save)()
+    await callback.message.edit_text('Ваш доклад завершен!',
+                                     parse_mode='HTML',
+                                     reply_markup=await get_just_main_menu_keyboard(),
+                                     )
+
+
+# @dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('donate'), state='*')
+# async def get_donate_handler(callback: types.CallbackQuery) -> None:
+#
+#     await sync_to_async(presentation.save)()
+#     await callback.message.edit_text('Ваш доклад завершен!',
+#                                      parse_mode='HTML',
+#                                      reply_markup=await get_just_main_menu_keyboard(),
+#                                      )
 
 
 class Command(BaseCommand):
