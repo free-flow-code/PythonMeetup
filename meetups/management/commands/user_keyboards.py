@@ -239,6 +239,25 @@ async def get_question_contacts_keyboard(presentation):
     return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
 
+async def get_donate_keyboard():
+    inline_keyboard = [
+        [
+            InlineKeyboardButton(text='100', callback_data='pay_100'),
+            InlineKeyboardButton(text='250', callback_data='pay_250'),
+            InlineKeyboardButton(text='350', callback_data='pay_250'),
+        ],
+        [
+            InlineKeyboardButton(text='500', callback_data='pay_500'),
+            InlineKeyboardButton(text='750', callback_data='pay_750'),
+            InlineKeyboardButton(text='1000', callback_data='pay_1000'),
+        ],
+        [
+            InlineKeyboardButton(text='Главное меню', callback_data='main_menu'),
+        ],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+
+
 if __name__ == '__main__':
     today = datetime.today()
     presentations = Presentation.objects.filter(event=1)

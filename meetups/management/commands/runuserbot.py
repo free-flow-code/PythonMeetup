@@ -6,9 +6,10 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import StatesGroup, State
 from django.core.management.base import BaseCommand
 from aiogram import Bot, Dispatcher, executor, types
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, LabeledPrice
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from django.db.models import Count
+from aiogram.types.message import ContentTypes
 
 from meetups.models import (
     Client,
@@ -27,7 +28,7 @@ from meetups.management.commands.user_keyboards import (
     get_question_main_menu_keyboard,
     get_cancel_keyboard,
     get_just_main_menu_keyboard, get_presentation_annotation_keyboard, get_show_my_events_keyboard,
-    get_question_contacts_keyboard,
+    get_question_contacts_keyboard, get_donate_keyboard,
 )
 
 logging.basicConfig(
@@ -55,6 +56,12 @@ class ClientRegisterFSM(StatesGroup):
 
 class ClientAskQuestionFSM(StatesGroup):
     enter_question = State()
+
+
+class DonateFSM(StatesGroup):
+    enter_donate_amount = State()
+    await_pre_checkout = State()
+    successful_payment = State()
 
 
 @dp.message_handler(commands=['start'])
@@ -334,14 +341,14 @@ async def like_question_handler(callback: types.CallbackQuery) -> None:
 async def get_main_menu_handler(callback: types.CallbackQuery, state: FSMContext) -> None:
     client = await sync_to_async(Client.objects.get)(chat_id=callback.from_user.id)
     await state.finish()
-    await callback.message.answer('🤖 ГЛАВНОЕ МЕНЮ:',
-                                  parse_mode='HTML',
-                                  reply_markup=await get_user_main_keyboard(client),
-                                  )
+    await callback.message.edit_text('🤖 ГЛАВНОЕ МЕНЮ:',
+                                     parse_mode='HTML',
+                                     reply_markup=await get_user_main_keyboard(client),
+                                     )
 
 
 @dp.callback_query_handler(lambda callback_query: callback_query.data == 'about', state='*')
-async def get_main_menu_handler(callback: types.CallbackQuery) -> None:
+async def get_bot_about_handler(callback: types.CallbackQuery) -> None:
     client = await sync_to_async(Client.objects.get)(chat_id=callback.from_user.id)
     text = """
 СЛУШАТЕЛИ МОГУТ:\n
@@ -464,14 +471,57 @@ async def get_presentation_finish_handler(callback: types.CallbackQuery) -> None
                                      )
 
 
-# @dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('donate'), state='*')
-# async def get_donate_handler(callback: types.CallbackQuery) -> None:
-#
-#     await sync_to_async(presentation.save)()
-#     await callback.message.edit_text('Ваш доклад завершен!',
-#                                      parse_mode='HTML',
-#                                      reply_markup=await get_just_main_menu_keyboard(),
-#                                      )
+@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('pay_'),
+                           state=DonateFSM.enter_donate_amount)
+async def get_donate_handler(callback: types.CallbackQuery, state: FSMContext) -> None:
+    donate_sum = int(callback.data.split('_')[-1])
+    prices = [LabeledPrice(label='Поддержка PythonMeetups', amount=donate_sum * 100)]
+    user_id = callback.from_user.id
+    await bot.send_invoice(
+        chat_id=callback.from_user.id,
+        title='Добровольное пожертвование',
+        description='Поддержка PythonMeetups',
+        provider_token=settings.YOO_KASSA_PROVIDER_TOKEN,
+        currency='RUB',
+        prices=prices,
+        payload='user_id_{}'.format(user_id),
+    )
+    await DonateFSM.next()
+
+
+@dp.pre_checkout_query_handler(state=DonateFSM.await_pre_checkout)
+async def process_pre_checkout_query(pre_checkout_query: types.PreCheckoutQuery, state: FSMContext):
+    await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
+    await state.finish()
+
+
+@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('donate'), state='*')
+async def enter_donate_sum_handler(callback: types.CallbackQuery) -> None:
+    await DonateFSM.enter_donate_amount.set()
+    await callback.message.edit_text('Спасибо, что решили нас поддержать!\n'
+                                     'Пожалуйста, выберите, сумму доната '
+                                     'или введите ее вручную в ответном сообщении.',
+                                     parse_mode='HTML',
+                                     reply_markup=await get_donate_keyboard(),
+                                     )
+
+@dp.message_handler(content_types=ContentTypes.SUCCESSFUL_PAYMENT)
+async def got_payment(message: types.Message):
+    await bot.send_message(message.chat.id,
+                           'Hoooooray! Thanks for payment! We will proceed your order for `{} {}`'
+                           ' as fast as possible! Stay in touch.'
+                           '\n\nUse /buy again to get a Time Machine for your friend!'.format(
+                               message.successful_payment.total_amount / 100, message.successful_payment.currency),
+                           parse_mode='Markdown')
+
+    total_amount = message.successful_payment.total_amount / 100
+    await bot.send_message(chat_id=message.from_user.id,
+                           text=f'{total_amount} руб. успешно зачислены!\n\n'
+                                f'Ваша поддержка очень важна для нас!\n'
+                                f'❤️ Спасибо!',
+                           parse_mode='HTML',
+                           reply_markup=await get_just_main_menu_keyboard(),
+                           )
 
 
 class Command(BaseCommand):
