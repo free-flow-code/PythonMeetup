@@ -112,3 +112,17 @@ class Donate(models.Model):
 
     def __str__(self):
         return f'{self.client.first_name} {self.client.last_name}: {self.sum}'
+
+
+class Organizer(models.Model):
+    user_id = models.CharField(max_length=20, verbose_name='ID организатора')
+    first_name = models.CharField(max_length=40, verbose_name='Имя организатора', null=True, blank=True)
+    last_name = models.CharField(max_length=100, verbose_name="Фамилия организатора", null=True, blank=True)
+    events = models.ManyToManyField(Event, verbose_name='Мероприятие', related_name='organizer')
+
+    class Meta:
+        verbose_name = 'Организатор'
+        verbose_name_plural = 'Организаторы'
+
+    def __str__(self):
+        return f'{self.user_id}: {self.first_name} {self.last_name}'
