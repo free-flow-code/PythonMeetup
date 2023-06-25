@@ -15,10 +15,13 @@ from meetups.models import (
     Event,
     Presentation,
     Question,
-    Visitor, Likes,
+    Visitor,
+    Likes,
+    Organizer
 )
 from asgiref.sync import sync_to_async
 from conf import settings
+from meetups.management.commands import admin_handlers
 from meetups.management.commands.user_keyboards import (
     get_user_main_keyboard,
     get_event_schedule_keyboard,
@@ -89,7 +92,7 @@ async def user_register_handler(callback: types.CallbackQuery) -> None:
     await ClientRegisterFSM.choose_event.set()
     events = await sync_to_async(Event.objects.all)()
     inline_keyboard = []
-    async for event in events:
+    for event in events:
         when_info = f'{event.date.strftime("%d.%m")} {event.start_time.strftime("%H:%M")}'
         name_info = f'{event.name}'
         event_keyboard=[[
@@ -472,6 +475,23 @@ async def get_presentation_finish_handler(callback: types.CallbackQuery) -> None
 #                                      parse_mode='HTML',
 #                                      reply_markup=await get_just_main_menu_keyboard(),
 #                                      )
+
+async def set_commands(bot: Bot):
+    commands = [
+            types.BotCommand(
+                command="/start",
+                description="Начало"
+            ),
+            types.BotCommand(
+                command="/admin",
+                description="Меню организатора"
+            ),
+            types.BotCommand(
+                command="/help",
+                description="Справка по работе бота"
+            ),
+        ]
+    await bot.set_my_commands(commands)
 
 
 class Command(BaseCommand):
