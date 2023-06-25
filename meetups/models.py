@@ -80,6 +80,7 @@ class Question(models.Model):
     def __str__(self):
         return f'{self.text}, {self.client.first_name} {self.client.last_name}'
 
+
 class Likes(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE, verbose_name='Вопрос', related_name='likes')
     client = models.ForeignKey(Client, on_delete=models.CASCADE, verbose_name='Клиент', related_name='likes')
@@ -91,3 +92,23 @@ class Likes(models.Model):
 
     def __str__(self):
         return f'{self.question.text}: {self.client.first_name} {self.client.last_name}'
+
+class Donate(models.Model):
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, verbose_name='Клиент', related_name='donates')
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        verbose_name='Мероприятие',
+        related_name='donates',
+        null=True,
+        blank=True,
+    )
+    sum = models.IntegerField(verbose_name='Сумма')
+    created_at = models.DateTimeField(verbose_name='Пожертвовано', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Донат'
+        verbose_name_plural = 'Донаты'
+
+    def __str__(self):
+        return f'{self.client.first_name} {self.client.last_name}: {self.sum}'
