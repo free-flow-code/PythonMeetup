@@ -11,6 +11,7 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from django.db.models import Count
 from aiogram.types.message import ContentTypes
 
+from meetups.management.commands.texts import about_bot
 from meetups.models import (
     Client,
     Event,
@@ -18,7 +19,7 @@ from meetups.models import (
     Question,
     Visitor,
     Likes,
-    Organizer
+    Organizer, Donate
 )
 from asgiref.sync import sync_to_async
 from conf import settings
@@ -31,7 +32,7 @@ from meetups.management.commands.user_keyboards import (
     get_question_main_menu_keyboard,
     get_cancel_keyboard,
     get_just_main_menu_keyboard, get_presentation_annotation_keyboard, get_show_my_events_keyboard,
-    get_question_contacts_keyboard, get_donate_keyboard,
+    get_question_contacts_keyboard, get_donate_keyboard, get_my_presentations_keyboard,
 )
 
 logging.basicConfig(
@@ -99,7 +100,7 @@ async def user_register_handler(callback: types.CallbackQuery) -> None:
     await ClientRegisterFSM.choose_event.set()
     events = await sync_to_async(Event.objects.all)()
     inline_keyboard = []
-    for event in events:
+    async for event in events:
         when_info = f'{event.date.strftime("%d.%m")} {event.start_time.strftime("%H:%M")}'
         name_info = f'{event.name}'
         event_keyboard=[[
@@ -184,6 +185,7 @@ async def user_register_personal_info_handler(message: types.Message, state: FSM
     await bot.send_message(client.chat_id,
                            f'{client.first_name} {client.last_name}, Вы успешно зарегистрированы!',
                            parse_mode='HTML',
+                           reply_markup=await get_user_main_keyboard(client)
                            )
     await state.finish()
 
@@ -233,6 +235,7 @@ async def show_current_presentation_questions_handler(callback: types.CallbackQu
     questions = await sync_to_async(
         Question.objects.filter(
             presentation=presentation_id,
+            is_closed=False,
         ).all().select_related('presentation').select_related('client').prefetch_related)('likes')
     presentation = await sync_to_async(
         Presentation.objects.filter(pk=presentation_id).select_related('speaker').first
@@ -339,8 +342,17 @@ async def like_question_handler(callback: types.CallbackQuery) -> None:
                                      ),
                                      )
 
+@dp.message_handler(commands=['cancel'], state='*')
+async def cancel_handler(message: types.Message, state: FSMContext) -> None:
+    await state.finish()
+    client = await sync_to_async(Client.objects.get)(chat_id=message.from_user.id)
+    await message.answer('🤖 ГЛАВНОЕ МЕНЮ:',
+                         parse_mode='HTML',
+                         reply_markup=await get_user_main_keyboard(client),
+                         )
 
-@dp.callback_query_handler(lambda callback_query: callback_query.data == 'main_menu', state='*')
+
+@dp.callback_query_handler(lambda callback_query: callback_query.data in ['main_menu', 'cancel'], state='*')
 async def get_main_menu_handler(callback: types.CallbackQuery, state: FSMContext) -> None:
     client = await sync_to_async(Client.objects.get)(chat_id=callback.from_user.id)
     await state.finish()
@@ -350,32 +362,19 @@ async def get_main_menu_handler(callback: types.CallbackQuery, state: FSMContext
                                      )
 
 
+@dp.message_handler(commands=['help'], state='*')
+async def cancel_handler(message: types.Message, state: FSMContext) -> None:
+
+    await message.answer(about_bot,
+                         parse_mode='HTML',
+                         reply_markup=await get_just_main_menu_keyboard(),
+                         )
+
+
 @dp.callback_query_handler(lambda callback_query: callback_query.data == 'about', state='*')
 async def get_bot_about_handler(callback: types.CallbackQuery) -> None:
-    client = await sync_to_async(Client.objects.get)(chat_id=callback.from_user.id)
-    text = """
-СЛУШАТЕЛИ МОГУТ:\n
-📖 ознакомиться с программой:\n <b>ГЛАВНОЕ МЕНЮ -> Программа</b>;\n\n
-❓задавать вопросы докладчикам:\n <b>ГЛАВНОЕ МЕНЮ -> Текущий доклад -> Задать вопрос</b>;\n\n
-👍 посмотреть вопросы других участников и поддержать те из них, которые вас тоже интересуют:
-<b>ГЛАВНОЕ МЕНЮ -> Текущий доклад -> Посмотреть вопросы -> 👍 Поддержать вопрос</b>;\n\n
-📆 посмотреть мероприятия, на которые вы зарегистрированы:
-<b>ГЛАВНОЕ МЕНЮ -> Мои мероприятия</b>\n
-<em>если кнопки <b>Мои мероприятия</b> нет, значит вы не зарегистрированы ни на одно мероприятие, прошедшие мероприятия не учитываются</em>;\n\n
-✅ зарегистрироваться на новое мероприятие:
-<b>ГЛАВНОЕ МЕНЮ -> Другие мероприятия</b>\n
-<em>если кнопки <b>Другие мероприятия</b> нет, значит пока нет мероприятий, на которые вы могли бы зарегистрироваться</em>;\n\n
-💰поддержать нас, отправив донат:
-<b>ГЛАВНОЕ МЕНЮ -> Сделать донат</b>;\n\n
-ДОКЛАДЧИКИ ТАКЖЕ МОГУТ:\n
-👀 посмотреть вопросы от участников мероприятия:
-<b>ГЛАВНОЕ МЕНЮ -> Текущий доклад -> Посмотреть вопросы;</b>\n\n
-🎫 посмотреть контакты людей, задавших вопросы:
-<b>ГЛАВНОЕ МЕНЮ -> Текущий доклад -> Посмотреть вопросы -> Посмотреть контакты;</b>\n\n
-⏰ завершить доклад, чтобы участники смогли отправлять вопросы следующему докладчику:
-<b>ГЛАВНОЕ МЕНЮ -> Текущий доклад -> Завершить доклад;</b>\n\n
-"""
-    await callback.message.edit_text(text,
+
+    await callback.message.edit_text(about_bot,
                                      parse_mode='HTML',
                                      reply_markup=await get_just_main_menu_keyboard(),
                                      )
@@ -476,7 +475,7 @@ async def get_presentation_finish_handler(callback: types.CallbackQuery) -> None
 
 @dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('pay_'),
                            state=DonateFSM.enter_donate_amount)
-async def get_donate_handler(callback: types.CallbackQuery, state: FSMContext) -> None:
+async def get_donate_callback_handler(callback: types.CallbackQuery) -> None:
     donate_sum = int(callback.data.split('_')[-1])
     prices = [LabeledPrice(label='Поддержка PythonMeetups', amount=donate_sum * 100)]
     user_id = callback.from_user.id
@@ -490,6 +489,28 @@ async def get_donate_handler(callback: types.CallbackQuery, state: FSMContext) -
         payload='user_id_{}'.format(user_id),
     )
     await DonateFSM.next()
+
+
+@dp.message_handler(state=DonateFSM.enter_donate_amount)
+async def get_donate_message_handler(message: types.Message) -> None:
+    try:
+        donate_sum = int(message.text)
+    except ValueError:
+        await message.answer('Пожалуйста, введите число:')
+        return
+    else:
+        prices = [LabeledPrice(label='Поддержка PythonMeetups', amount=donate_sum * 100)]
+        user_id = message.from_user.id
+        await bot.send_invoice(
+            chat_id=message.from_user.id,
+            title='Добровольное пожертвование',
+            description='Поддержка PythonMeetups',
+            provider_token=settings.YOO_KASSA_PROVIDER_TOKEN,
+            currency='RUB',
+            prices=prices,
+            payload='user_id_{}'.format(user_id),
+        )
+        await DonateFSM.next()
 
 
 @dp.pre_checkout_query_handler(state=DonateFSM.await_pre_checkout)
@@ -510,14 +531,16 @@ async def enter_donate_sum_handler(callback: types.CallbackQuery) -> None:
 
 @dp.message_handler(content_types=ContentTypes.SUCCESSFUL_PAYMENT)
 async def got_payment(message: types.Message):
-    await bot.send_message(message.chat.id,
-                           'Hoooooray! Thanks for payment! We will proceed your order for `{} {}`'
-                           ' as fast as possible! Stay in touch.'
-                           '\n\nUse /buy again to get a Time Machine for your friend!'.format(
-                               message.successful_payment.total_amount / 100, message.successful_payment.currency),
-                           parse_mode='Markdown')
-
+    client = await sync_to_async(Client.objects.get)(chat_id=message.from_user.id)
+    today = datetime.today()
+    now = datetime.now()
+    current_event = await sync_to_async(Event.objects.filter(date=today, start_time__lte=now.time()).first)()
     total_amount = message.successful_payment.total_amount / 100
+    await sync_to_async(Donate.objects.create)(
+        client=client,
+        sum=total_amount,
+        event=current_event,
+    )
     await bot.send_message(chat_id=message.from_user.id,
                            text=f'{total_amount} руб. успешно зачислены!\n\n'
                                 f'Ваша поддержка очень важна для нас!\n'
@@ -526,19 +549,58 @@ async def got_payment(message: types.Message):
                            reply_markup=await get_just_main_menu_keyboard(),
                            )
 
+
+@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('question_close'), state='*')
+async def get_presentation_finish_handler(callback: types.CallbackQuery) -> None:
+    question_id = callback.data.split('_')[-1]
+    question = await sync_to_async(
+        Question.objects.filter(pk=question_id).first
+    )()
+    question.is_closed = True
+    await sync_to_async(question.save)()
+    await callback.message.edit_text('Вопрос закрыт!',
+                                     parse_mode='HTML',
+                                     )
+
+
+@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('question_close'), state='*')
+async def get_presentation_finish_handler(callback: types.CallbackQuery) -> None:
+    question_id = callback.data.split('_')[-1]
+    question = await sync_to_async(
+        Question.objects.filter(pk=question_id).first
+    )()
+    question.is_closed = True
+    await sync_to_async(question.save)()
+    await callback.message.edit_text('Вопрос закрыт!',
+                                     parse_mode='HTML',
+                                     )
+
+@dp.callback_query_handler(lambda callback_query: callback_query.data == 'show_my_presentations', state='*')
+async def show_my_presentations_handler(callback: types.CallbackQuery) -> None:
+    client = await sync_to_async(Client.objects.get)(chat_id=callback.from_user.id)
+    await callback.message.edit_text('СПИСОК ВАШИХ ДОКЛАДОВ:',
+                                     parse_mode='HTML',
+                                     reply_markup=await get_my_presentations_keyboard(client),
+                                     )
+
+
 async def set_commands(bot: Bot):
     commands = [
             types.BotCommand(
                 command="/start",
-                description="Начало"
+                description="Начало",
             ),
             types.BotCommand(
                 command="/admin",
-                description="Меню организатора"
+                description="Меню организатора",
             ),
             types.BotCommand(
                 command="/help",
-                description="Справка по работе бота"
+                description="Справка по работе бота",
+            ),
+            types.BotCommand(
+                command="/cancel",
+                description="Отмена текущего действия, возврат в главное меню",
             ),
         ]
     await bot.set_my_commands(commands)
