@@ -71,7 +71,7 @@ class Question(models.Model):
     presentation = models.ForeignKey(Presentation, on_delete=models.CASCADE, verbose_name='Презентация', related_name='questions')
     client = models.ForeignKey(Client, on_delete=models.CASCADE, verbose_name='Клиент', related_name='questions')
     created_at = models.DateTimeField(verbose_name='Задан', auto_now_add=True)
-    # is_closed = models.BooleanField(verbose_name='Закрыт', default=False)
+    is_closed = models.BooleanField(verbose_name='Закрыт', default=False)
 
     class Meta:
         verbose_name = 'Вопрос'

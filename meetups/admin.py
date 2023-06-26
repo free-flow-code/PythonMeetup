@@ -6,7 +6,8 @@ from meetups.models import (
     Presentation,
     Likes,
     Question,
-    Organizer
+    Donate,
+    Organizer,
 )
 
 admin.site.register(Client)
@@ -15,4 +16,5 @@ admin.site.register(Visitor)
 admin.site.register(Presentation)
 admin.site.register(Likes)
 admin.site.register(Question)
+admin.site.register(Donate)
 admin.site.register(Organizer)

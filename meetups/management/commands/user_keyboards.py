@@ -105,6 +105,34 @@ async def get_event_schedule_keyboard(event):
             [
                 InlineKeyboardButton(text=name_info, callback_data=f'presentation_annotation_{presentation.pk}')
             ],
+            [
+                InlineKeyboardButton(text='Главное меню', callback_data='main_menu'),
+            ],
+        ]
+        inline_keyboard += presentation_keyboard
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+
+
+async def get_my_presentations_keyboard(client):
+    presentations = await sync_to_async(
+        Presentation.objects.filter(speaker__chat_id=client.chat_id).select_related('event').select_related
+    )('speaker')
+    inline_keyboard = []
+    async for presentation in presentations:
+        time_info = f'{presentation.start_time.strftime("%H:%M")} - {presentation.end_time.strftime("%H:%M")}'
+        date_info = f'{presentation.event.date.strftime("%d.%m.%Y")}'
+        name_info = f'{presentation.name}'
+        presentation_keyboard = [
+            [
+                InlineKeyboardButton(text=date_info, callback_data='none'),
+                InlineKeyboardButton(text=time_info, callback_data='none'),
+            ],
+            [
+                InlineKeyboardButton(text=name_info, callback_data=f'none')
+            ],
+            [
+                InlineKeyboardButton(text='Главное меню', callback_data='main_menu'),
+            ],
         ]
         inline_keyboard += presentation_keyboard
     return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
@@ -231,6 +259,25 @@ async def get_question_contacts_keyboard(presentation):
     inline_keyboard = [
         [
             InlineKeyboardButton(text='К списку вопросов', callback_data=f'questions_show_{presentation.pk}'),
+        ],
+        [
+            InlineKeyboardButton(text='Главное меню', callback_data='main_menu'),
+        ],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+
+
+async def get_donate_keyboard():
+    inline_keyboard = [
+        [
+            InlineKeyboardButton(text='100', callback_data='pay_100'),
+            InlineKeyboardButton(text='250', callback_data='pay_250'),
+            InlineKeyboardButton(text='350', callback_data='pay_350'),
+        ],
+        [
+            InlineKeyboardButton(text='500', callback_data='pay_500'),
+            InlineKeyboardButton(text='750', callback_data='pay_750'),
+            InlineKeyboardButton(text='1000', callback_data='pay_1000'),
         ],
         [
             InlineKeyboardButton(text='Главное меню', callback_data='main_menu'),
