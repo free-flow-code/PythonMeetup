@@ -3,6 +3,7 @@ from datetime import datetime
 import calendar
 
 import aiogram.utils.callback_data
+from aiogram.utils.exceptions import ChatNotFound
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import StatesGroup, State
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -32,6 +33,17 @@ class EditPresentation(StatesGroup):
     id = State()
     flag = State()
     time = State()
+
+
+class CreatePresentationFSM(StatesGroup):
+    event_id = State()
+    name = State()
+    annotation = State()
+    start_time = State()
+    end_time = State()
+    speaker_id = State()
+    speaker_name = State()
+
 
 
 def get_events_details(events):
@@ -84,7 +96,7 @@ async def admin_command(message: types.Message) -> None:
 
 
 @dp.callback_query_handler(lambda callback_query: callback_query.data == 'create_event')
-async def create_event_handler(callback: types.CallbackQuery, state: FSMContext) -> None:
+async def create_event_handler(callback: types.CallbackQuery) -> None:
     await CreateEventFSM.name.set()
 
     await callback.message.answer('Введите название для нового мероприятия:', parse_mode='HTML')
@@ -122,7 +134,8 @@ def get_year_keyboard():
     return inline_kb
 
 
-@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('set_year_'), state=CreateEventFSM.year)
+@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('set_year_'),
+                           state=CreateEventFSM.year)
 async def get_event_month(callback: types.CallbackQuery, state: FSMContext) -> None:
     year = callback.data.split('_')[-1]
     async with state.proxy() as data:
@@ -161,7 +174,8 @@ def get_month_keyboard():
     return inline_kb
 
 
-@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('set_month_'), state=CreateEventFSM.month)
+@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('set_month_'),
+                           state=CreateEventFSM.month)
 async def get_event_day(callback: types.CallbackQuery, state: FSMContext) -> None:
     month = callback.data.split('_')[-1]
     async with state.proxy() as data:
@@ -228,7 +242,8 @@ def get_time_keyboard():
     return inline_kb
 
 
-@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('set_time'), state=CreateEventFSM.start_time)
+@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('set_time'),
+                           state=CreateEventFSM.start_time)
 async def create_event(callback: types.CallbackQuery, state: FSMContext) -> None:
     time = callback.data.split('_')[-1]
     async with state.proxy() as data:
@@ -259,7 +274,7 @@ async def create_event(callback: types.CallbackQuery, state: FSMContext) -> None
     )
 
 
-def get_presentations_keyboard(presentations):
+def get_presentations_keyboard(presentations, event_id):
     inline_kb = InlineKeyboardMarkup(row_width=1)
     for presentation in presentations:
         inline_kb.insert(InlineKeyboardButton(
@@ -267,7 +282,7 @@ def get_presentations_keyboard(presentations):
             callback_data=f'edit_presentation_{presentation.id}'
         ))
         inline_kb.row()
-    inline_kb.insert(InlineKeyboardButton('Новый доклад', callback_data='create_presentation'))
+    inline_kb.insert(InlineKeyboardButton('Новый доклад', callback_data=f'create_presentation_{event_id}'))
 
     return inline_kb
 
@@ -280,7 +295,7 @@ async def edit_event(callback: types.CallbackQuery) -> None:
     await callback.message.answer(
         'Выберите доклад, чтобы изменить время его начала и завершения, либо создайте новый.',
         parse_mode='HTML',
-        reply_markup=await sync_to_async(get_presentations_keyboard)(presentations)
+        reply_markup=await sync_to_async(get_presentations_keyboard)(presentations, event_id)
     )
 
 
@@ -309,7 +324,8 @@ async def edit_presentation(callback: types.CallbackQuery, state: FSMContext) ->
     )
 
 
-@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('edit_time_'), state=EditPresentation.flag)
+@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('edit_time_'),
+                           state=EditPresentation.flag)
 async def get_presentation_time(callback: types.CallbackQuery, state: FSMContext) -> None:
     flag = callback.data.split('_')[-1]
     async with state.proxy() as data:
@@ -375,3 +391,145 @@ async def edit_presentation_time(message: types.Message, state: FSMContext) -> N
     )
     await state.finish()
     await sending_to_members(ids, mess)
+
+
+@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('create_presentation_'))
+async def create_presentation_handler(callback: types.CallbackQuery, state: FSMContext) -> None:
+    await CreatePresentationFSM.event_id.set()
+    event_id = callback.data.split('_')[-1]
+    async with state.proxy() as data:
+        data['event_id'] = event_id
+    await CreatePresentationFSM.next()
+
+    await callback.message.answer('Введите название для новой презентации:', parse_mode='HTML')
+
+
+@dp.message_handler(state=CreatePresentationFSM.name)
+async def get_presentation_name(message: types.Message, state: FSMContext) -> None:
+    async with state.proxy() as data:
+        data['name'] = message.text
+    await CreatePresentationFSM.next()
+
+    await message.answer('Добавьте описание:', parse_mode='HTML')
+
+
+@dp.message_handler(state=CreatePresentationFSM.annotation)
+async def get_presentation_annotation(message: types.Message, state: FSMContext) -> None:
+    async with state.proxy() as data:
+        data['annotation'] = message.text
+    await CreatePresentationFSM.next()
+
+    await message.answer(
+        'Выберите время начала доклада:',
+        parse_mode='HTML',
+        reply_markup=get_time_keyboard()
+    )
+
+
+@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('set_time'),
+                           state=CreatePresentationFSM.start_time)
+async def get_presentation_start_time(callback: types.CallbackQuery, state: FSMContext) -> None:
+    time = callback.data.split('_')[-1]
+    async with state.proxy() as data:
+        data['start_time'] = datetime.strptime(time, '%H:%M').time()
+    await CreatePresentationFSM.next()
+
+    await callback.message.answer(
+        'Выберите время завершения доклада:',
+        parse_mode='HTML',
+        reply_markup=get_time_keyboard()
+    )
+
+
+@dp.callback_query_handler(lambda callback_query: callback_query.data.startswith('set_time'),
+                           state=CreatePresentationFSM.end_time)
+async def get_presentation_end_time(callback: types.CallbackQuery, state: FSMContext) -> None:
+    time = callback.data.split('_')[-1]
+    async with state.proxy() as data:
+        data['end_time'] = datetime.strptime(time, '%H:%M').time()
+    await CreatePresentationFSM.next()
+
+    await callback.message.answer(
+        'Осталось выбрать, кто будет спикером доклада.\nВведите telegram id докладчика:',
+        parse_mode='HTML'
+    )
+
+
+async def create_presentation(speaker, data):
+    event = await sync_to_async(Event.objects.get)(id=data['event_id'])
+    presentation, _ = await sync_to_async(Presentation.objects.get_or_create)(
+        name=data['name'],
+        annotation=data['annotation'],
+        event=event,
+        start_time=data['start_time'],
+        end_time=data['end_time'],
+        speaker=speaker
+    )
+    await sync_to_async(presentation.save)()
+    ids = [speaker.chat_id]
+    message = f'Вы назначены спикером с докладом {data["name"]} на мероприятии {presentation.event.name}\n'\
+              f'Время начала доклада {data["start_time"]}'
+    try:
+        await sending_to_members(ids, message)
+    except ChatNotFound:
+        pass
+
+
+@dp.message_handler(state=CreatePresentationFSM.speaker_id)
+async def get_presentation_speaker(message: types.Message, state: FSMContext) -> None:
+    speaker_id = message.text
+    async with state.proxy() as data:
+        data['speaker_id'] = speaker_id
+
+    try:
+        speaker = await sync_to_async(Client.objects.get)(chat_id=speaker_id)
+        data = await state.get_data()
+        await create_presentation(speaker, data)
+        await state.finish()
+
+        organizer = await sync_to_async(Organizer.objects.get)(user_id=message.from_user.id)
+        organizer_events = await sync_to_async(Event.objects.filter)(organizer=organizer)
+        events_details = await sync_to_async(get_events_details)(organizer_events)
+
+        await message.answer(
+            'Новый доклад создан.\nСпикер получит соответствующее оповещение.'
+            'Выберите мероприятие, чтобы изменить его программу или создайте новое.',
+            parse_mode='HTML',
+            reply_markup=get_admin_keyboard(events_details)
+        )
+    except ObjectDoesNotExist:
+        await message.answer(
+            'Этот человек еще не зарегистрирован в боте.\nЧтобы зарегистрировать введите его имя и '
+            'фамилию в формате: <b>Имя Фамилия</b>',
+            parse_mode='HTML'
+        )
+        await CreatePresentationFSM.next()
+
+
+@dp.message_handler(state=CreatePresentationFSM.speaker_name)
+async def create_new_speaker(message: types.Message, state: FSMContext) -> None:
+    if message.text.count(' ') != 1:
+        await message.answer('Неверный формат ввода. Попробуйте еще раз.\n'
+                             'Введите имя и фамилию спикера в формате: <b>Имя Фамилия</b>',
+                             parse_mode='HTML',
+                             )
+        return
+    data = await state.get_data()
+    first_name, last_name = message.text.split()
+    client, _ = await sync_to_async(Client.objects.get_or_create)(chat_id=data['speaker_id'])
+    client.first_name = first_name
+    client.last_name = last_name
+    await sync_to_async(client.save)()
+    await create_presentation(client, data)
+    await state.finish()
+
+    organizer = await sync_to_async(Organizer.objects.get)(user_id=message.from_user.id)
+    organizer_events = await sync_to_async(Event.objects.filter)(organizer=organizer)
+    events_details = await sync_to_async(get_events_details)(organizer_events)
+
+    await message.answer(
+        'Новый спикер зарегистрирован и доклад создан.\nСпикер получит соответствующее оповещение.\n'
+        'Выберите мероприятие, чтобы изменить его программу или создайте новое.',
+        parse_mode='HTML',
+        reply_markup=get_admin_keyboard(events_details)
+    )
