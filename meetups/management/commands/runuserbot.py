@@ -92,7 +92,7 @@ async def user_register_handler(callback: types.CallbackQuery) -> None:
     await ClientRegisterFSM.choose_event.set()
     events = await sync_to_async(Event.objects.all)()
     inline_keyboard = []
-    for event in events:
+    async for event in events:
         when_info = f'{event.date.strftime("%d.%m")} {event.start_time.strftime("%H:%M")}'
         name_info = f'{event.name}'
         event_keyboard=[[
